@@ -1,0 +1,5 @@
+js_out
+gen/
+node_modules
+input/
+.DS_Store
