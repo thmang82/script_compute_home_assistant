@@ -1,4 +1,4 @@
-import { SocketInfo } from "./script";
+import { SocketInfo, verbose } from "./script";
 import { AsssistantCommand } from "./socket_command";
 import { HaSource } from "./sources/_sources";
 import { SourceCovers } from "./sources/covers";
@@ -84,9 +84,13 @@ export class AssistantMessages {
                 const entity_type  = entity_id.substring(0, i);
                 const entity_ident = entity_id.substring(i + 1);
                 const source = this.sources[entity_type];
-                console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
                 if (source) {
+                    console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
                     source.stateChange(<any> <unknown> msg.event);
+                } else {
+                    if (verbose) {
+                        console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
+                    }
                 }
             }
         }
