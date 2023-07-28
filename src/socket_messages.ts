@@ -1,8 +1,9 @@
 import { SocketInfo } from "./script";
 import { AsssistantCommand } from "./socket_command";
 import { HaSource } from "./sources/_sources";
+import { SourceCovers } from "./sources/covers";
 import { SourceLights } from "./sources/lights";
-import { HaApi } from "./types";
+import { HaApi } from "./types/type_base";
 
 export interface MsgRefs {
     cmd_: AsssistantCommand;
@@ -23,6 +24,7 @@ export class AssistantMessages {
             this.sources[source.entity_type] = source;
         }
         addSource(new SourceLights());
+        addSource(new SourceCovers());
     }
 
     private handleAuthReq = () => {
@@ -68,7 +70,7 @@ export class AssistantMessages {
             Object.keys(state_map).forEach(entity_type => {
                 const source = this.sources[entity_type];
                 if (source) {
-                    source.setStates(state_map[entity_type]);
+                    source.setStates(<any> <unknown> state_map[entity_type]);
                 }
             });
         }
@@ -80,11 +82,11 @@ export class AssistantMessages {
             const i = entity_id.indexOf(".");
             if (i > 0) {
                 const entity_type  = entity_id.substring(0, i);
-                const entity_ident =  entity_id.substring(i + 1);
+                const entity_ident = entity_id.substring(i + 1);
                 const source = this.sources[entity_type];
-                console.log(`State change: '${entity_type}' / '${entity_ident}'`);
+                console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
                 if (source) {
-                    source.stateChange(<HaApi.EventStateChange<HaApi.EntityLight.State>> <unknown> msg.event);
+                    source.stateChange(<any> <unknown> msg.event);
                 }
             }
         }

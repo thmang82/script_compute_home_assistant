@@ -6,9 +6,11 @@ import { AssistantMessages } from './socket_messages';
 import { AsssistantCommand } from './socket_command';
 import { SourceLights } from './sources/lights';
 import { SourceDeviceLights } from '@script_types/sources/devices/source_device_lights';
+import { SourceCovers } from './sources/covers';
+import { SourceDeviceCovers } from '@script_types/sources/devices/source_device_covers';
+import { ParameterType } from '@script_types/spec/spec_parameter';
 
-type ProvidedSources = "compute" | "device_lights";
-
+type ProvidedSources = "compute" | "device_lights" | "device_covers";
 
 export let sendToDisplay: FnSendToDisplay | undefined;
 export type FnSendToDisplay = (ident: ProvidedSources, data: object) => void;
@@ -16,6 +18,13 @@ export type FnSendToDisplay = (ident: ProvidedSources, data: object) => void;
 export interface SocketInfo {
     uid: string;
 }
+
+export let verbose = false;
+
+export let renamings: {
+    device_id?: { value: string ,  name: string };
+    name?: { value: string ,  name: string };
+}[] = [];
 
 export class MyScript implements Script.Class<ScriptConfig, ProvidedSources> {
 
@@ -47,7 +56,14 @@ export class MyScript implements Script.Class<ScriptConfig, ProvidedSources> {
         this.config = config;
 
         console.info("Ident:" + specification.id_ident);
-        console.info("Config:" + JSON.stringify(config));
+        console.info("Config:", config);
+
+        if (config.device_rename) {
+            renamings = config.device_rename;
+        }
+        if (config.verbose_log) {
+            verbose = config.verbose_log.value;
+        }
 
         let host = config.host?.value;
         const token = config.token?.value;
@@ -92,17 +108,47 @@ export class MyScript implements Script.Class<ScriptConfig, ProvidedSources> {
         ctx.script.registerConfigOptionsProvider(async (req) => {
             let ident = req.parameter_ident;
             console.debug("Config req: ", req);
-            if (ident == "light") {
-                // This is a request from the widget light selector!
-                const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
-                if (s_light) {
-                    return s_light.getConfigParameters();
+            if (req.source == "widget") {
+                if (ident == "light") {
+                    // This is a request from the "light widget" selector!
+                    const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
+                    if (s_light) {
+                        return s_light.getConfigParameters();
+                    } else {
+                        return { no_data: 'DataMissing' };
+                    }
+                } else if (ident == "cover") {
+                    // This is a request from the "cover widget" selector!
+                    const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
+                    if (s_cover) {
+                        return s_cover.getConfigParameters();
+                    } else {
+                        return { no_data: 'DataMissing' };
+                    }
                 } else {
-                    return { no_data: 'DataMissing' };
+                    console.error("Config Options Req: UnkownID: ", ident);
+                    return { no_data: 'UnknownID' };
                 }
-            } else {
-                console.error("Config Options Req: UnkownID: ", ident);
-                return { no_data: 'UnknownID' };
+            } else if (req.source == "script_instance") {
+                if (ident == "device_id") {
+                    // for renaming
+                    let entries: ParameterType.DropdownEntry[] = [];
+                    const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
+                    if (s_cover) {
+                        const entries_t = s_cover.getConfigParameters().dropdown_entries;
+                        entries_t.forEach(e => { e.name = "Cover: " + e.name });
+                        entries = entries.concat(entries_t);
+                    }
+                    const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
+                    if (s_light) {
+                        const entries_t = s_light.getConfigParameters().dropdown_entries;
+                        entries_t.forEach(e => { e.name = "Light: " + e.name });
+                        entries = entries.concat(entries_t);
+                    }
+                    return {
+                        dropdown_entries: entries
+                    }
+                }
             }
         });
     }
@@ -148,7 +194,15 @@ export class MyScript implements Script.Class<ScriptConfig, ProvidedSources> {
             if (s_light) {
                 return s_light.handleDataRequestDisplay(req_params);
             } else {
-                console.error("dataRequest: No Service found")
+                console.error("dataRequest: No 'light' servcie found")
+            }
+        } else if (type == "device_covers") {
+            console.log("Data Request: ", type, req_params);
+            const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
+            if (s_cover) {
+                return s_cover.handleDataRequestDisplay(req_params);
+            } else {
+                console.error("dataRequest: No 'cover' service found")
             }
         }
        return undefined;
@@ -164,10 +218,26 @@ export class MyScript implements Script.Class<ScriptConfig, ProvidedSources> {
                 if (ha_msg) {
                     this.sendMessage(ha_msg);
                     return { success: true };
+                } else {
+                    console.error("executeCommand: No message from 'light' service");
                 }
             } else {
-                console.error("executeCommand: No Service found")
+                console.error("executeCommand: No 'light' service found")
             }
+        } else if (type == "device_covers") {
+            const msg = <SourceDeviceCovers.Command.Request> _cmd;
+            const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
+            if (s_cover) {
+                const ha_msg = await s_cover.handleCommandDisplay(msg);
+                if (ha_msg) {
+                    this.sendMessage(ha_msg);
+                    return { success: true };
+                }
+            } else {
+                console.error("executeCommand: No 'cover' service found")
+            }
+        } else {
+            console.warn("executeCommand: No consumer implemented")
         }
         return {}
     }

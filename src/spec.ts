@@ -5,7 +5,7 @@ export const specification: DataSource.Specification = {
     id_ident:  "home_assistant",
     id_author: "thmang82",
     // ---
-    provides: [ "compute", "device_lights" ],
+    provides: [ "compute", "device_lights", "device_covers" ],
     // ---
     version:   "0.1.0",
     // ---
@@ -49,6 +49,58 @@ export const specification: DataSource.Specification = {
             validate: [ /^[a-zA-Z0-9-_]+\.+[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+$/ ],
             value_default: undefined,
             value_type: "string"
+        },
+        {
+            type: "EntryList",
+            ident: "device_rename",
+            translations: {
+                'en': {
+                    name: "Rename Devices",
+                    description: "Add devices that you want to rename to the list"
+                }
+            },
+            parameters: [
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "device_id",
+                    translations: {
+                        'en': {
+                            name:  "Device",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string"
+                },
+                {
+                    type: "TextField",
+                    ident: "name",
+                    translations: {
+                        'en': {
+                            name:  "New Name",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string",
+                    validate: undefined,
+                    value_default: undefined,
+                    value_example: "Table"
+                }
+            ]
+        },
+        {
+            type: "Checkbox",
+            ident: "verbose_log",
+            translations: {
+                'en': {
+                    name: "Verbose logging",
+                    description: undefined
+                }
+            },
+            value_default: false,
+            value_type: 'boolean'
         }
     ],
     notifications: [],

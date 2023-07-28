@@ -1,14 +1,15 @@
 import { ParameterType } from "@script_types/spec/spec_parameter";
-import { HaApi } from "../types";
 import { SourceBase } from "./_sources";
 import { SourceDeviceLights } from '@script_types/sources/devices/source_device_lights';
-import { sendToDisplay } from "../script";
+import { renamings, sendToDisplay, verbose } from "../script";
+import { EntityLight } from "../types/type_lights";
+import { HaApi } from "../types/type_base";
 
-export class SourceLights implements SourceBase {
+export class SourceLights implements SourceBase<EntityLight.State> {
 
     public readonly entity_type = "light";
 
-    private lights: HaApi.EntityLight.State[] = [];
+    private lights: EntityLight.State[] = [];
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
         return {
@@ -21,7 +22,7 @@ export class SourceLights implements SourceBase {
         }
     }
 
-    public setStates = (states: HaApi.EntityLight.State[]) => {
+    public setStates = (states: EntityLight.State[]) => {
         console.log("SourceLights, setStates: ", states);
         states.forEach(state => {
             const id = state.entity_id;
@@ -35,7 +36,7 @@ export class SourceLights implements SourceBase {
         this.transmitStateToDisplay();
     }
 
-    public stateChange = (change: HaApi.EventStateChange<HaApi.EntityLight.State>) => {
+    public stateChange = (change: HaApi.EventStateChange<EntityLight.State>) => {
         console.log("SourceLights, stateChange: ", change);
         const id = change.data.entity_id;
         const i = this.lights.findIndex(e => e.entity_id == id);
@@ -48,15 +49,20 @@ export class SourceLights implements SourceBase {
     }
 
     public handleDataRequestDisplay = async (_params: object): Promise<SourceDeviceLights.Data> => {
+        const lights = this.lights.map(e => {
+            const rename = renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
+            return {
+                ident: e.entity_id,
+                name: rename ? rename : e.attributes.friendly_name,
+                brightness: e.attributes.brightness,
+                state: e.state
+            }
+        })
+        if (verbose) {
+            console.debug("send lights: ", lights, renamings);
+        }
         return {
-            lights: this.lights.map(e => {
-                return {
-                    ident: e.entity_id,
-                    name: e.attributes.friendly_name,
-                    brightness: e.attributes.brightness,
-                    state: e.state
-                }
-            })
+            lights
         }
     }
 
@@ -67,11 +73,14 @@ export class SourceLights implements SourceBase {
         }
     }
 
-    public handleCommandDisplay = async (cmd: SourceDeviceLights.Command.Request): Promise<HaApi.EntityLight.CallService | undefined> => {
+    public handleCommandDisplay = async (cmd: SourceDeviceLights.Command.Request): Promise<EntityLight.CallService | undefined> => {
         const change = cmd.change;
         const ident = change.ident;
         let light = this.lights.find(e => e.entity_id == ident);
         if (light) {
+            if (verbose) {
+                console.debug("Change light: ", light, change);
+            }
             let state_target: "off" | "on" | undefined;
             if (change.state == "toggle") {
                 if (light.state) {
@@ -97,6 +106,8 @@ export class SourceLights implements SourceBase {
                     }
                 }
             }
+        } else {
+            console.error("Could not find light: ", ident);
         }
         return undefined;
     }
