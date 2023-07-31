@@ -51,12 +51,47 @@ export class SourceLights implements SourceBase<EntityLight.State> {
     public handleDataRequestDisplay = async (_params: object): Promise<SourceDeviceLights.Data> => {
         const lights = this.lights.map(e => {
             const rename = renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
-            return {
+            const data: SourceDeviceLights.LightStatus = {
                 ident: e.entity_id,
                 name: rename ? rename : e.attributes.friendly_name,
                 brightness: e.attributes.brightness,
-                state: e.state
+                state: e.state,
+                supported_color_modes: []
+            };
+            e.attributes.supported_color_modes.forEach(e => {
+                if (e != "white" && e !== "unknown") {
+                    data.supported_color_modes.push(e);
+                }
+            });
+            const mode = e.attributes.color_mode;
+            if (mode !== "white" && mode !== "unknown") {
+                data.color_mode = mode;
+                if (e.attributes.min_color_temp_kelvin && e.attributes.max_color_temp_kelvin) {
+                    data.range_color_temp_kelvin = {
+                        min: e.attributes.min_color_temp_kelvin,
+                        max: e.attributes.max_color_temp_kelvin
+                    }
+                }
+                if (e.attributes.color_temp_kelvin !== undefined) {
+                    data.color_temp_kelvin = e.attributes.color_temp_kelvin;
+                }
+                if (e.attributes.xy_color) {
+                    data.color_xy = { x: e.attributes.xy_color[0], y: e.attributes.xy_color[1] }
+                }
+                if (e.attributes.hs_color) {
+                    data.color_hs = { h: e.attributes.hs_color[0], s: e.attributes.hs_color[1] }
+                }
+                if (e.attributes.rgb_color) {
+                    data.color_rgb = { r: e.attributes.rgb_color[0], g: e.attributes.rgb_color[1], b: e.attributes.rgb_color[2] }
+                }
+                if (e.attributes.rgbw_color) {
+                    data.color_rgbw = { r: e.attributes.rgbw_color[0], g: e.attributes.rgbw_color[1], b: e.attributes.rgbw_color[2], w: e.attributes.rgbw_color[3] }
+                }
+                if (e.attributes.rgbww_color) {
+                    data.color_rgbww = { r: e.attributes.rgbww_color[0], g: e.attributes.rgbww_color[1], b: e.attributes.rgbww_color[2], w: e.attributes.rgbww_color[3], ww: e.attributes.rgbww_color[3] }
+                }
             }
+            return data;
         })
         if (verbose) {
             console.debug("send lights: ", lights, renamings);
@@ -91,12 +126,35 @@ export class SourceLights implements SourceBase<EntityLight.State> {
             }
             if (state_target) {
                 if (state_target == "on") {
-                    return {
+                    let call: EntityLight.CallService = {
                         type: "call_service",
                         domain: "light",
                         service: "turn_on",
-                        target: { entity_id: ident }
+                        target: { entity_id: ident },
+                        service_data: {}
                     }
+                    if (change.brightness) {
+                        call.service_data.brightness = change.brightness;
+                    }
+                    if (change.color_temp_kelvin) {
+                        call.service_data.color_temp_kelvin = change.color_temp_kelvin;
+                    }
+                    if (change.color_xy) {
+                        call.service_data.xy_color = [ change.color_xy.x, change.color_xy.y ];
+                    }
+                    if (change.color_hs) {
+                        call.service_data.hs_color = [ change.color_hs.h, change.color_hs.s ];
+                    }
+                    if (change.color_rgb) {
+                        call.service_data.rgb_color = [ change.color_rgb.r, change.color_rgb.g, change.color_rgb.b ];
+                    }
+                    if (change.color_rgbw) {
+                        call.service_data.rgbw_color = [ change.color_rgbw.r, change.color_rgbw.g, change.color_rgbw.b, change.color_rgbw.w ];
+                    }
+                    if (change.color_rgbww) {
+                        call.service_data.rgbww_color = [ change.color_rgbww.r, change.color_rgbww.g, change.color_rgbww.b, change.color_rgbww.w, change.color_rgbww.ww ];
+                    }
+                    return call;
                 } else {
                     return {
                         type: "call_service",
