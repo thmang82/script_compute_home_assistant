@@ -1,6 +1,6 @@
 {
     "name": "script-compute-home_assistant",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "description": "define at src/spec.ts",
     "main": "src/script.ts",
     "config": {
