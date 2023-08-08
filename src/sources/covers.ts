@@ -5,6 +5,19 @@ import { SourceDeviceCovers } from "@script_types/sources/devices/source_device_
 import { HaApi } from "../types/type_base";
 import { EntityCover } from "../types/type_covers";
 
+function getFeatures(bitmask: number): SourceDeviceCovers.CoverFeature[] {
+    const masks: SourceDeviceCovers.CoverFeature[] = [];
+    if (bitmask & 1) masks.push("open");
+    if (bitmask & 2) masks.push("close");
+    if (bitmask & 4) masks.push("set_position");
+    if (bitmask & 8) masks.push("stop");
+    if (bitmask & 16) masks.push("open_tilt");
+    if (bitmask & 32) masks.push("close_tilt");
+    if (bitmask & 64) masks.push("stop_tilt");
+    if (bitmask & 128) masks.push("set_tilt_position");
+    return masks;
+}
+
 export class SourceCovers implements SourceBase<EntityCover.State> {
 
     public readonly entity_type = "cover";
@@ -48,30 +61,31 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
         this.transmitStateToDisplay();
     }
 
-    public handleDataRequestDisplay = async (_params: object): Promise<SourceDeviceCovers.Data> => {
+    public handleDataRequestCover = async (_params: object): Promise<SourceDeviceCovers.Data> => {
         return { 
             covers: this.covers.map(e => {
                 const rename = renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
-                return {
+                const cover: SourceDeviceCovers.Cover =  {
                     ident: e.entity_id,
                     name: rename ? rename : e.attributes.friendly_name,
                     open_position: e.attributes.current_position,
                     tilt_position: e.attributes.current_tilt_position,
                     state: e.state,
-                    features: []
-                }
+                    features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : []
+                };
+                return cover;
             })
         }
     }
 
     private transmitStateToDisplay = async () => {
-        const data = await this.handleDataRequestDisplay({});
+        const data = await this.handleDataRequestCover({});
         if (sendToDisplay) {
-            sendToDisplay("device_lights", data);
+            sendToDisplay("device_covers", data);
         }
     }
 
-    public handleCommandDisplay = async (cmd: SourceDeviceCovers.Command.Request): Promise<EntityCover.CallService | undefined> => {
+    public handleCommandCover = async (cmd: SourceDeviceCovers.Command.Request): Promise<EntityCover.CallService | undefined> => {
         const change = cmd.change;
         const ident = change.ident;
         let cover = this.covers.find(e => e.entity_id == ident);

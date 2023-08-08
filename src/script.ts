@@ -7,11 +7,12 @@ import { SourceLights } from './sources/lights';
 import { SourceCovers } from './sources/covers';
 import { ParameterType } from '@script_types/spec/spec_parameter';
 import { ScriptCtxUI } from '@script_types/script/context_ui/context_ui';
+import { DataSourcesTypes } from '@script_types/sources/sources_types';
 
 type ProvidedSources = "compute" | "device_lights" | "device_covers";
 
 export let sendToDisplay: FnSendToDisplay | undefined;
-export type FnSendToDisplay = (ident: ProvidedSources, data: object) => void;
+export type FnSendToDisplay = <T extends ProvidedSources>(ident: T, data: DataSourcesTypes.MapData<T>) => void;
 
 export interface SocketInfo {
     uid: string;
@@ -159,11 +160,13 @@ export class MyScript implements Script.Class<ScriptConfig> {
                 }
             }
             return undefined;
-        });
-        
+        });   
     }
 
-    public sendToDisplay = (ident: ProvidedSources, data: object) => {
+    public sendToDisplay = <T extends ProvidedSources>(ident: T, data: DataSourcesTypes.MapData<T>) => {
+        if (this.config?.verbose_log) {
+            console.debug(`sendToDisplay: '${ident}': `, data);
+        }
         this.ctx?.ui.transmitData(ident, data);
     }
 
@@ -198,25 +201,33 @@ export class MyScript implements Script.Class<ScriptConfig> {
     }
 
     public dataRequestLights: ScriptCtxUI.DataRequestCallback<"device_lights"> = async (req_params) => {
-        console.debug("dataRequestLights: ", req_params);
+        console.debug(`dataRequestLights ...`);
         const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
         if (s_light) {
-            return s_light.handleDataRequestDisplay(req_params);
+            const data = await s_light.handleDataRequestDisplay(req_params);
+            if (this.config?.verbose_log) {
+                console.debug(`dataRequestLights: send: `, data);
+            }
+            return data;
         } else {
-            console.error("dataRequest: No 'light' servcie found")
+            console.error("dataRequest: No 'light' service found")
         }
         return undefined;
     }
 
     public dataRequestCovers: ScriptCtxUI.DataRequestCallback<"device_covers"> = async (req_params) => {
-        console.debug("dataRequestCovers: ", req_params);
+        console.debug(`dataRequestCovers ...`);
         const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
         if (s_cover) {
-            return s_cover.handleDataRequestDisplay(req_params);
+            const data = await s_cover.handleDataRequestCover(req_params);
+            if (this.config?.verbose_log) {
+                console.debug(`dataRequestCovers: send: `, data);
+            }
+            return data;
         } else {
             console.error("dataRequest: No 'cover' service found")
         }
-       return undefined;
+        return undefined;
     };
 
     public executeCommandLights: ScriptCtxUI.CommandCallback<"device_lights"> = async (cmd, _env) => {
@@ -228,10 +239,10 @@ export class MyScript implements Script.Class<ScriptConfig> {
                 this.sendMessage(ha_msg);
                 return { success: true };
             } else {
-                console.error("executeCommand: No message from 'light' service");
+                console.warn(`executeCommandLights: No handler found for ${cmd.change.ident}`);
             }
         } else {
-            console.error("executeCommand: No 'light' service found")
+            console.error("executeCommandLights: No 'light' service found")
         }
         return undefined;
     }
@@ -240,13 +251,15 @@ export class MyScript implements Script.Class<ScriptConfig> {
         console.log("executeCommandCovers: ", cmd);
         const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
         if (s_cover) {
-            const ha_msg = await s_cover.handleCommandDisplay(cmd);
+            const ha_msg = await s_cover.handleCommandCover(cmd);
             if (ha_msg) {
                 this.sendMessage(ha_msg);
                 return { success: true };
+            } else {
+                console.warn(`executeCommandCovers: No handler found for ${cmd.change.ident}`);
             }
         } else {
-            console.error("executeCommand: No 'cover' service found")
+            console.error("executeCommandCovers: No 'cover' service found")
         }
         return undefined;
     }
