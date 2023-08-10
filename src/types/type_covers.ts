@@ -17,7 +17,7 @@ export namespace EntityCover {
             friendly_name: string;
             /** The opening state, between 0 and 100 */
             current_position?: number;
-                /** The tilt opening state, between 0 and 100 */
+            /** The tilt opening state, between 0 and 100 */
             current_tilt_position?: number;
             /** Bitmask of SUPPORT */
             supported_features: number;

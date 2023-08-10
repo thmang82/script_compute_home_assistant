@@ -159,7 +159,9 @@ export class MyScript implements Script.Class<ScriptConfig> {
                     }
                 }
             }
-            return undefined;
+            return {
+                no_data: "UnknownID"
+            };
         });   
     }
 

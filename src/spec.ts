@@ -7,7 +7,7 @@ export const specification: DataSource.Specification = {
     // ---
     provides: [ "compute", "device_lights", "device_covers" ],
     // ---
-    version:   "0.2.2",
+    version:   "0.2.3",
     // ---
     author_email: "",
     translations: {

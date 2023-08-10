@@ -12,6 +12,7 @@ export class SourceLights implements SourceBase<EntityLight.State> {
     private lights: EntityLight.State[] = [];
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
+        console.debug("SourceLights: getConfigParameters ...");
         return {
             dropdown_entries: this.lights.map(e => {
                 return {
@@ -23,7 +24,7 @@ export class SourceLights implements SourceBase<EntityLight.State> {
     }
 
     public setStates = (states: EntityLight.State[]) => {
-        console.log("SourceLights, setStates: ", states);
+        console.log("SourceLights: setStates: ", states);
         states.forEach(state => {
             const id = state.entity_id;
             const i = this.lights.findIndex(e => e.entity_id == id);
@@ -37,7 +38,7 @@ export class SourceLights implements SourceBase<EntityLight.State> {
     }
 
     public stateChange = (change: HaApi.EventStateChange<EntityLight.State>) => {
-        console.log("SourceLights, stateChange: ", change);
+        console.log("SourceLights: stateChange: ", change);
         const id = change.data.entity_id;
         const i = this.lights.findIndex(e => e.entity_id == id);
         if (i >= 0) {
@@ -105,6 +106,8 @@ export class SourceLights implements SourceBase<EntityLight.State> {
         const data = await this.handleDataRequestDisplay({});
         if (sendToDisplay) {
             sendToDisplay("device_lights", data);
+        }  else {
+            console.error("SourceLights: sendToDisplay missing!");
         }
     }
 

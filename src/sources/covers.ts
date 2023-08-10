@@ -25,6 +25,7 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
     private covers: EntityCover.State[] = [];
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
+        console.debug("SourceCovers: getConfigParameters ...");
         return {
             dropdown_entries: this.covers.map(e => {
                 return {
@@ -36,7 +37,7 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
     }
 
     public setStates = (states: EntityCover.State[]) => {
-        console.log("SourceCovers, setStates: ", states);
+        console.log("SourceCovers: setStates: ", states);
         states.forEach(state => {
             const id = state.entity_id;
             const i = this.covers.findIndex(e => e.entity_id == id);
@@ -50,7 +51,7 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
     }
 
     public stateChange = (change: HaApi.EventStateChange<EntityCover.State>) => {
-        console.log("SourceLights, stateChange: ", change);
+        console.log("SourceCovers: stateChange: ", change);
         const id = change.data.entity_id;
         const i = this.covers.findIndex(e => e.entity_id == id);
         if (i >= 0) {
@@ -82,6 +83,8 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
         const data = await this.handleDataRequestCover({});
         if (sendToDisplay) {
             sendToDisplay("device_covers", data);
+        } else {
+            console.error("SourceCovers: sendToDisplay missing!");
         }
     }
 

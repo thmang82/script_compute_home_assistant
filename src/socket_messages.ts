@@ -25,6 +25,8 @@ export class AssistantMessages {
         }
         addSource(new SourceLights());
         addSource(new SourceCovers());
+
+        console.debug("SourceHandler: " + Object.keys(this.sources).join(", "));
     }
 
     private handleAuthReq = () => {
@@ -85,13 +87,21 @@ export class AssistantMessages {
                 const entity_ident = entity_id.substring(i + 1);
                 const source = this.sources[entity_type];
                 if (source) {
-                    console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
+                    console.debug(`handleEvent:toService: '${entity_type}' / '${entity_ident}': `, msg.event);
                     source.stateChange(<any> <unknown> msg.event);
                 } else {
                     if (verbose) {
-                        console.debug(`State change: '${entity_type}' / '${entity_ident}': `, msg.event);
+                        console.debug(`handleEvent:noSource: '${entity_type}' / '${entity_ident}': `, msg.event);
                     }
                 }
+            } else {
+                if (verbose) {
+                    console.debug(`handleEvent:noEntityParse: `, msg.event);
+                }
+            }
+        } else {
+            if (verbose) {
+                console.debug(`handleEvent:otherEventType: `, msg.event);
             }
         }
     }
