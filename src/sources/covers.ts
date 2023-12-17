@@ -1,9 +1,10 @@
 import { ParameterType } from "@script_types/spec/spec_parameter";
-import { SourceBase } from "./_sources";
-import { renamings, sendToDisplay } from "../script";
+import { CallbackChangeNotify, SourceBase } from "./_sources";
+import { sendToDisplay } from "../script";
 import { SourceDeviceCovers } from "@script_types/sources/devices/source_device_covers";
 import { HaApi } from "../types/type_base";
 import { EntityCover } from "../types/type_covers";
+import { Setup } from "../setup";
 
 function getFeatures(bitmask: number): SourceDeviceCovers.CoverFeature[] {
     const masks: SourceDeviceCovers.CoverFeature[] = [];
@@ -22,7 +23,16 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
 
     public readonly entity_type = "cover";
 
-    private covers: EntityCover.State[] = [];
+    public covers: EntityCover.State[] = [];
+
+    private change_cb_: CallbackChangeNotify | undefined;
+    public setChangeHandler = (cb: CallbackChangeNotify): void => {
+        this.change_cb_ = cb;
+    }
+
+    public registryUpdated = () => {
+        // Todo: check that all covers still exist!
+    }
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
         console.debug("SourceCovers: getConfigParameters ...");
@@ -60,22 +70,59 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             this.covers.push(change.data.new_state);
         }
         this.transmitStateToDisplay();
+        
+    }
+
+    private convertToCover = (e: EntityCover.State): SourceDeviceCovers.Cover => {
+        let rename = Setup.renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
+
+        const device_class = e.attributes.device_class;
+        let type: SourceDeviceCovers.CoverType | undefined = undefined;
+        switch (device_class) {
+            case "door": type = "door"; break;
+            case "garage": type = "garage_door"; break;
+            case "window": type = "window"; break;
+            case "gate": type = "gate"; break;
+            case "blind": type = "blind"; break;
+            case "curtain": type = "curtain"; break;
+            case "shade": type = "shade"; break;
+            case "shutter": type = "shutter"; break;
+        }
+        let window_type: SourceDeviceCovers.WindowType | undefined = undefined;
+        if (type == "window") {
+            // Todo: Check the source config for the window type that the user specified!
+            let s = Setup.window_setup;
+            if (s) {
+                const setup = s.find(r => e.entity_id == r.window_sensor_id?.value);
+                if (setup) {
+                    let type_update = <SourceDeviceCovers.WindowType | undefined> setup.window_type?.value;
+                    if (type_update) {
+                        window_type = type_update;
+                    }
+                    let rename_window = setup.name?.value;
+                    if (rename_window) {
+                        rename = rename_window;
+                    }
+                }
+            }
+        }
+
+        const cover: SourceDeviceCovers.Cover =  {
+            ident: e.entity_id,
+            type,
+            name: rename ? rename : e.attributes.friendly_name,
+            open_position: e.attributes.current_position,
+            tilt_position: e.attributes.current_tilt_position,
+            state: e.state,
+            window_type,
+            features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : []
+        };
+        return cover;
     }
 
     public handleDataRequestCover = async (_params: object): Promise<SourceDeviceCovers.Data> => {
         return { 
-            covers: this.covers.map(e => {
-                const rename = renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
-                const cover: SourceDeviceCovers.Cover =  {
-                    ident: e.entity_id,
-                    name: rename ? rename : e.attributes.friendly_name,
-                    open_position: e.attributes.current_position,
-                    tilt_position: e.attributes.current_tilt_position,
-                    state: e.state,
-                    features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : []
-                };
-                return cover;
-            })
+            covers: this.covers.map(this.convertToCover)
         }
     }
 
@@ -85,6 +132,9 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             sendToDisplay("device_covers", data);
         } else {
             console.error("SourceCovers: sendToDisplay missing!");
+        }
+        if (this.change_cb_) {
+            this.change_cb_();
         }
     }
 
@@ -117,6 +167,10 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             }
         }
         return undefined;
+    }
+
+    public getActiveCovers = (): SourceDeviceCovers.Cover[] => {
+        return this.covers.filter(e => e.state != "closed" && e.state !== "stopped").map(this.convertToCover);
     }
 
     /*

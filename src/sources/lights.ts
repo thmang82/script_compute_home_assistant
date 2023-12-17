@@ -1,15 +1,25 @@
 import { ParameterType } from "@script_types/spec/spec_parameter";
-import { SourceBase } from "./_sources";
+import { CallbackChangeNotify, SourceBase } from "./_sources";
 import { SourceDeviceLights } from '@script_types/sources/devices/source_device_lights';
-import { renamings, sendToDisplay, verbose } from "../script";
+import { sendToDisplay, verbose } from "../script";
 import { EntityLight } from "../types/type_lights";
 import { HaApi } from "../types/type_base";
+import { Setup } from "../setup";
 
 export class SourceLights implements SourceBase<EntityLight.State> {
 
     public readonly entity_type = "light";
 
-    private lights: EntityLight.State[] = [];
+    public lights: EntityLight.State[] = [];
+
+    private change_cb_: CallbackChangeNotify | undefined;
+    public setChangeHandler = (cb: CallbackChangeNotify): void => {
+        this.change_cb_ = cb;
+    }
+
+    public registryUpdated = () => {
+        // Todo: check that all ligths still exist!
+    }
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
         console.debug("SourceLights: getConfigParameters ...");
@@ -49,53 +59,55 @@ export class SourceLights implements SourceBase<EntityLight.State> {
         this.transmitStateToDisplay();
     }
 
-    public handleDataRequestDisplay = async (_params: object): Promise<SourceDeviceLights.Data> => {
-        const lights = this.lights.map(e => {
-            const rename = renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
-            const data: SourceDeviceLights.LightStatus = {
-                ident: e.entity_id,
-                name: rename ? rename : e.attributes.friendly_name,
-                brightness: e.attributes.brightness,
-                state: e.state,
-                supported_color_modes: []
-            };
-            e.attributes.supported_color_modes.forEach(e => {
-                if (e != "white" && e !== "unknown") {
-                    data.supported_color_modes.push(e);
-                }
-            });
-            const mode = e.attributes.color_mode;
-            if (mode !== "white" && mode !== "unknown") {
-                data.color_mode = mode;
-                if (e.attributes.min_color_temp_kelvin && e.attributes.max_color_temp_kelvin) {
-                    data.range_color_temp_kelvin = {
-                        min: e.attributes.min_color_temp_kelvin,
-                        max: e.attributes.max_color_temp_kelvin
-                    }
-                }
-                if (e.attributes.color_temp_kelvin !== undefined) {
-                    data.color_temp_kelvin = e.attributes.color_temp_kelvin;
-                }
-                if (e.attributes.xy_color) {
-                    data.color_xy = { x: e.attributes.xy_color[0], y: e.attributes.xy_color[1] }
-                }
-                if (e.attributes.hs_color) {
-                    data.color_hs = { h: e.attributes.hs_color[0], s: e.attributes.hs_color[1] }
-                }
-                if (e.attributes.rgb_color) {
-                    data.color_rgb = { r: e.attributes.rgb_color[0], g: e.attributes.rgb_color[1], b: e.attributes.rgb_color[2] }
-                }
-                if (e.attributes.rgbw_color) {
-                    data.color_rgbw = { r: e.attributes.rgbw_color[0], g: e.attributes.rgbw_color[1], b: e.attributes.rgbw_color[2], w: e.attributes.rgbw_color[3] }
-                }
-                if (e.attributes.rgbww_color) {
-                    data.color_rgbww = { r: e.attributes.rgbww_color[0], g: e.attributes.rgbww_color[1], b: e.attributes.rgbww_color[2], w: e.attributes.rgbww_color[3], ww: e.attributes.rgbww_color[3] }
+    private convertToLightStatus = (e: EntityLight.State): SourceDeviceLights.LightStatus => {
+        const rename = Setup.renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
+        const data: SourceDeviceLights.LightStatus = {
+            ident: e.entity_id,
+            name: rename ? rename : e.attributes.friendly_name,
+            brightness: e.attributes.brightness,
+            state: e.state,
+            supported_color_modes: []
+        };
+        e.attributes.supported_color_modes.forEach(e => {
+            if (e != "white" && e !== "unknown") {
+                data.supported_color_modes.push(e);
+            }
+        });
+        const mode = e.attributes.color_mode;
+        if (mode !== "white" && mode !== "unknown") {
+            data.color_mode = mode;
+            if (e.attributes.min_color_temp_kelvin && e.attributes.max_color_temp_kelvin) {
+                data.range_color_temp_kelvin = {
+                    min: e.attributes.min_color_temp_kelvin,
+                    max: e.attributes.max_color_temp_kelvin
                 }
             }
-            return data;
-        })
+            if (e.attributes.color_temp_kelvin !== undefined) {
+                data.color_temp_kelvin = e.attributes.color_temp_kelvin;
+            }
+            if (e.attributes.xy_color) {
+                data.color_xy = { x: e.attributes.xy_color[0], y: e.attributes.xy_color[1] }
+            }
+            if (e.attributes.hs_color) {
+                data.color_hs = { h: e.attributes.hs_color[0], s: e.attributes.hs_color[1] }
+            }
+            if (e.attributes.rgb_color) {
+                data.color_rgb = { r: e.attributes.rgb_color[0], g: e.attributes.rgb_color[1], b: e.attributes.rgb_color[2] }
+            }
+            if (e.attributes.rgbw_color) {
+                data.color_rgbw = { r: e.attributes.rgbw_color[0], g: e.attributes.rgbw_color[1], b: e.attributes.rgbw_color[2], w: e.attributes.rgbw_color[3] }
+            }
+            if (e.attributes.rgbww_color) {
+                data.color_rgbww = { r: e.attributes.rgbww_color[0], g: e.attributes.rgbww_color[1], b: e.attributes.rgbww_color[2], w: e.attributes.rgbww_color[3], ww: e.attributes.rgbww_color[3] }
+            }
+        }
+        return data;
+    }
+
+    public handleDataRequestDisplay = async (_params: object): Promise<SourceDeviceLights.Data> => {
+        const lights = this.lights.map(this.convertToLightStatus);
         if (verbose) {
-            console.debug("send lights: ", lights, renamings);
+            console.debug("send lights: ", lights, Setup.renamings);
         }
         return {
             lights
@@ -108,6 +120,9 @@ export class SourceLights implements SourceBase<EntityLight.State> {
             sendToDisplay("device_lights", data);
         }  else {
             console.error("SourceLights: sendToDisplay missing!");
+        }
+        if (this.change_cb_) {
+            this.change_cb_();
         }
     }
 
@@ -171,6 +186,11 @@ export class SourceLights implements SourceBase<EntityLight.State> {
             console.error("Could not find light: ", ident);
         }
         return undefined;
+    }
+
+    public getActiveLights = (): SourceDeviceLights.LightStatus[] => {
+        const active_l = this.lights.filter(e => e.state == "on").map(this.convertToLightStatus);
+        return active_l;
     }
 
     /*

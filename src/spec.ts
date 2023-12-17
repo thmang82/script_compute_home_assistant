@@ -5,9 +5,9 @@ export const specification: DataSource.Specification = {
     id_ident:  "home_assistant",
     id_author: "thmang82",
     // ---
-    provides: [ "compute", "device_lights", "device_covers" ],
+    provides: [ "compute", "device_lights", "device_covers", "devices_overview" ],
     // ---
-    version:   "0.2.3",
+    version:   "0.2.4",
     // ---
     author_email: "",
     translations: {
@@ -87,6 +87,60 @@ export const specification: DataSource.Specification = {
                     validate: undefined,
                     value_default: undefined,
                     value_example: "Table"
+                }
+            ]
+        },
+        {
+            type: "EntryList",
+            ident: "window_setup",
+            translations: {
+                'en': {
+                    name: "Window Setup",
+                    description: "Add window sensors to the list for classifing them"
+                }
+            },
+            parameters: [
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "window_sensor_id",
+                    translations: {
+                        'en': {
+                            name:  "Sensor",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string"
+                },
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "window_type",
+                    translations: {
+                        'en': {
+                            name:  "Window Type",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string"
+                },
+                {
+                    type: "TextField",
+                    ident: "name",
+                    translations: {
+                        'en': {
+                            name:  "New Name",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string",
+                    validate: undefined,
+                    value_default: undefined,
+                    value_example: "South Window"
                 }
             ]
         },

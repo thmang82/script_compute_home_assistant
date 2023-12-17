@@ -1,12 +1,14 @@
+import { EntityBinarySensor } from "./type_binary_sensor";
 import { EntityCover } from "./type_covers";
 import { EntityLight } from "./type_lights";
+import { EntitySensor } from "./type_sensor";
 
 export namespace HaApi {
 
-    export type EntityType = "light" | "cover";
+    export type EntityType = "light" | "cover" | "binary_sensor" | "sensor";
 
-    export type EventType = "state_changed";
-    export type Event = EventStateChange<any>;
+    export type EventType = "state_changed" | "area_registry_updated" | "device_registry_updated";
+    export type Event = EventStateChange<any> | EventAreaRegistryUpdate | EventDeviceRegistryUpdate;
 
     export interface EventStateChange<T extends EntityState> {
         event_type: "state_changed",
@@ -14,6 +16,38 @@ export namespace HaApi {
             entity_id: string,
             old_state: T,
             new_state: T
+        },
+        /** e.g. LOCAL */
+        origin: string;
+        /** ISO time str, e.g 2023-07-06T19:11:00.309279+00:00*/
+        time_fired: string;
+        context: Context;
+    }
+
+    // {"action":"update","device_id":"ae842294728477edfcb86d86ac5303a3","changes":{"area_id":"flur"}},"origin":"LOCAL","time_fired":"2023-12-16T23:56:04.564285+00:00","context":{"id":"01HHTGXY2M9JDGY71NSWMEFK7M","parent_id":null,"user_id":null}}
+    export interface EventDeviceRegistryUpdate {
+        event_type: "device_registry_updated",
+        data: {
+            /** e.g. update */
+            action: string,
+            device_id: string,
+            /** e.g. { "area_id":"flur" } */
+            changes: object
+        },
+        /** e.g. LOCAL */
+        origin: string;
+        /** ISO time str, e.g 2023-07-06T19:11:00.309279+00:00*/
+        time_fired: string;
+        context: Context;
+    }
+
+    
+    // Example: {"event_type":"area_registry_updated","data":{"action":"update","area_id":"flur"},"origin":"LOCAL","time_fired":"2023-12-16T23:51:52.473388+00:00","context":{"id":"01HHTGP7WS4PZ4EEHQDMX7Z74X","parent_id":null,"user_id":null}}
+    export interface EventAreaRegistryUpdate {
+        event_type: "area_registry_updated",
+        data: {
+            action: string,
+            area_id: string
         },
         /** e.g. LOCAL */
         origin: string;
@@ -30,7 +64,7 @@ export namespace HaApi {
         user_id: string | any;
     }
 
-    export type EntityState = EntityLight.State | EntityCover.State;
+    export type EntityState = EntityLight.State | EntityCover.State | EntityBinarySensor.State | EntitySensor.State;
 
     export interface EntityStateBase {
         entity_id: string;

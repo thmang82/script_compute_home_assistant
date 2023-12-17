@@ -3,11 +3,14 @@ import { ScriptConfig } from '../gen/spec_config'; /* File will be automatically
 import { specification } from './spec';
 import { AssistantMessages } from './socket_messages';
 import { AsssistantCommand } from './socket_command';
-import { SourceLights } from './sources/lights';
-import { SourceCovers } from './sources/covers';
 import { ParameterType } from '@script_types/spec/spec_parameter';
 import { ScriptCtxUI } from '@script_types/script/context_ui/context_ui';
 import { DataSourcesTypes } from '@script_types/sources/sources_types';
+import { HaApi } from './types/type_base';
+import { DeviceOverview } from './sources/overview';
+import { Sources } from './sources/_construct';
+import { sRegistry } from './registry';
+import { Setup } from './setup';
 
 type ProvidedSources = "compute" | "device_lights" | "device_covers";
 
@@ -20,16 +23,13 @@ export interface SocketInfo {
 
 export let verbose = false;
 
-export let renamings: {
-    device_id?: { value: string ,  name: string };
-    name?: { value: string ,  name: string };
-}[] = [];
 
 export class MyScript implements Script.Class<ScriptConfig> {
 
     private msg_id = 1;
     private cmd_handler: AsssistantCommand;
     private msg_handler: AssistantMessages;
+    private source_overview: DeviceOverview;
     
     private config: ScriptConfig | undefined;
     private ctx: Script.Context | undefined;
@@ -44,6 +44,11 @@ export class MyScript implements Script.Class<ScriptConfig> {
             sendMessage: this.sendMessage,
             getToken: this.getToken
         });
+        this.source_overview = new DeviceOverview();
+        sRegistry.setCommandHandler(this.cmd_handler);
+
+        Sources.sCovers.setChangeHandler(() => this.dataChange('cover'));
+        Sources.sLights.setChangeHandler(() => this.dataChange('light'));
     }
 
     public getToken = (): string | undefined => {
@@ -58,7 +63,10 @@ export class MyScript implements Script.Class<ScriptConfig> {
         console.info("Config:", config);
 
         if (config.device_rename) {
-            renamings = config.device_rename;
+            Setup.renamings = config.device_rename;
+        }
+        if (config.window_setup) {
+            Setup.window_setup = config.window_setup;
         }
         if (config.verbose_log) {
             verbose = config.verbose_log.value;
@@ -110,6 +118,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
 
         ctx.ui.subscribeDataRequests<"device_lights">("device_lights", this.dataRequestLights).then(handleSubscriptionResult);
         ctx.ui.subscribeDataRequests<"device_covers">("device_covers", this.dataRequestCovers).then(handleSubscriptionResult);
+        ctx.ui.subscribeDataRequests<"devices_overview">("devices_overview", this.dataRequestOverview).then(handleSubscriptionResult);
 
         ctx.ui.subscribeCommands<"device_lights">("device_lights", this.executeCommandLights).then(handleSubscriptionResult);
         ctx.ui.subscribeCommands<"device_covers">("device_covers", this.executeCommandCovers).then(handleSubscriptionResult);
@@ -120,20 +129,10 @@ export class MyScript implements Script.Class<ScriptConfig> {
             if (req.source == "widget") {
                 if (ident == "light") {
                     // This is a request from the "light widget" selector!
-                    const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
-                    if (s_light) {
-                        return s_light.getConfigParameters();
-                    } else {
-                        return { no_data: 'DataMissing' };
-                    }
+                    return Sources.sLights.getConfigParameters();
                 } else if (ident == "cover") {
                     // This is a request from the "cover widget" selector!
-                    const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
-                    if (s_cover) {
-                        return s_cover.getConfigParameters();
-                    } else {
-                        return { no_data: 'DataMissing' };
-                    }
+                    return Sources.sCovers.getConfigParameters();
                 } else {
                     console.error("Config Options Req: UnkownID: ", ident);
                     return { no_data: 'UnknownID' };
@@ -141,19 +140,32 @@ export class MyScript implements Script.Class<ScriptConfig> {
             } else if (req.source == "script_instance") {
                 if (ident == "device_id") {
                     // for renaming
+                    
                     let entries: ParameterType.DropdownEntry[] = [];
-                    const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
-                    if (s_cover) {
-                        const entries_t = s_cover.getConfigParameters().dropdown_entries;
-                        entries_t.forEach(e => { e.name = "Cover: " + e.name });
-                        entries = entries.concat(entries_t);
+                    const entries_c =  Sources.sCovers.getConfigParameters().dropdown_entries;
+                    entries_c.forEach(e => { e.name = "Cover: " + e.name });
+                    entries = entries.concat(entries_c);
+
+                    const entries_l = Sources.sLights.getConfigParameters().dropdown_entries;
+                    entries_l.forEach(e => { e.name = "Light: " + e.name });
+                    entries = entries.concat(entries_l);
+
+                    return {
+                        dropdown_entries: entries
                     }
-                    const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
-                    if (s_light) {
-                        const entries_t = s_light.getConfigParameters().dropdown_entries;
-                        entries_t.forEach(e => { e.name = "Light: " + e.name });
-                        entries = entries.concat(entries_t);
+                } else if (ident == "window_sensor_id") {
+                    let entries: ParameterType.DropdownEntry[] = [];
+                    // Get the sensors with class window or door:
+                    const entries_win = Sources.sBinarySensors.getWindowsForConfig().dropdown_entries;
+                    entries = entries.concat(entries_win);
+                    return {
+                        dropdown_entries: entries
                     }
+                } else if (ident == "window_type") {
+                    let entries: ParameterType.DropdownEntry[] = [];
+                    Setup.window_types.forEach(w => {
+                        entries.push({ value: w, name: w });
+                    })
                     return {
                         dropdown_entries: entries
                     }
@@ -204,64 +216,63 @@ export class MyScript implements Script.Class<ScriptConfig> {
 
     public dataRequestLights: ScriptCtxUI.DataRequestCallback<"device_lights"> = async (req_params) => {
         console.debug(`dataRequestLights ...`);
-        const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
-        if (s_light) {
-            const data = await s_light.handleDataRequestDisplay(req_params);
-            if (this.config?.verbose_log) {
-                console.debug(`dataRequestLights: send: `, data);
-            }
-            return data;
-        } else {
-            console.error("dataRequest: No 'light' service found")
+        const data = await Sources.sLights.handleDataRequestDisplay(req_params);
+        if (this.config?.verbose_log) {
+            console.debug(`dataRequestLights: send: `, data);
         }
-        return undefined;
+        return data;
     }
 
     public dataRequestCovers: ScriptCtxUI.DataRequestCallback<"device_covers"> = async (req_params) => {
         console.debug(`dataRequestCovers ...`);
-        const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
-        if (s_cover) {
-            const data = await s_cover.handleDataRequestCover(req_params);
-            if (this.config?.verbose_log) {
-                console.debug(`dataRequestCovers: send: `, data);
-            }
-            return data;
-        } else {
-            console.error("dataRequest: No 'cover' service found")
+        const data = await Sources.sCovers.handleDataRequestCover(req_params);
+        if (this.config?.verbose_log) {
+            console.debug(`dataRequestCovers: send: `, data);
         }
-        return undefined;
+        return data;
+    };
+
+    private dataChange = async (_type: HaApi.EntityType) => {
+        // recompute the overview state and send to frontend: 
+        const data = await this.dataRequestOverview({});
+        if (data) {
+            this.ctx?.ui.transmitData("devices_overview", data);
+        }
+    }
+
+    public dataRequestOverview: ScriptCtxUI.DataRequestCallback<"devices_overview"> = async (_req_params) => {
+        console.debug(`dataRequestOverview ...`);
+
+        const active_lights = Sources.sLights.getActiveLights();
+        const active_covers = Sources.sCovers.getActiveCovers();
+
+        const response = this.source_overview.getDataResponse(active_lights, active_covers);
+        if (this.config?.verbose_log) {
+            console.debug(`dataRequestOverview: send: `, response);
+        }
+        return response;
     };
 
     public executeCommandLights: ScriptCtxUI.CommandCallback<"device_lights"> = async (cmd, _env) => {
         console.log("executeCommandLights: ", cmd);
-        const s_light = <SourceLights | undefined> this.msg_handler.getSourceRef("light");
-        if (s_light) {
-            const ha_msg = await s_light.handleCommandDisplay(cmd);
-            if (ha_msg) {
-                this.sendMessage(ha_msg);
-                return { success: true };
-            } else {
-                console.warn(`executeCommandLights: No handler found for ${cmd.change.ident}`);
-            }
+        const ha_msg = await Sources.sLights.handleCommandDisplay(cmd);
+        if (ha_msg) {
+            this.sendMessage(ha_msg);
+            return { success: true };
         } else {
-            console.error("executeCommandLights: No 'light' service found")
+            console.warn(`executeCommandLights: No handler found for ${cmd.change.ident}`);
         }
         return undefined;
     }
     
     public executeCommandCovers: ScriptCtxUI.CommandCallback<"device_covers"> = async (cmd, _env) => {
         console.log("executeCommandCovers: ", cmd);
-        const s_cover = <SourceCovers | undefined> this.msg_handler.getSourceRef("cover");
-        if (s_cover) {
-            const ha_msg = await s_cover.handleCommandCover(cmd);
-            if (ha_msg) {
-                this.sendMessage(ha_msg);
-                return { success: true };
-            } else {
-                console.warn(`executeCommandCovers: No handler found for ${cmd.change.ident}`);
-            }
+        const ha_msg = await Sources.sCovers.handleCommandCover(cmd);
+        if (ha_msg) {
+            this.sendMessage(ha_msg);
+            return { success: true };
         } else {
-            console.error("executeCommandCovers: No 'cover' service found")
+            console.warn(`executeCommandCovers: No handler found for ${cmd.change.ident}`);
         }
         return undefined;
     }
