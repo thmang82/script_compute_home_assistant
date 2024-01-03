@@ -7,7 +7,7 @@ export const specification: DataSource.Specification = {
     // ---
     provides: [ "compute", "device_lights", "device_covers", "devices_overview" ],
     // ---
-    version:   "0.2.5",
+    version:   "0.2.6",
     // ---
     author_email: "",
     translations: {
@@ -155,18 +155,44 @@ export const specification: DataSource.Specification = {
             },
             parameters: [
                 {
-                    type: "DropDownList",
+                    type: "MultiSelect",
                     entries: [],
                     req_source: true,
-                    auto_complete: false,
                     ident: "area_ids",
                     translations: {
                         'en': {
-                            name:  "Home Area",
+                            name:  "Covered Areas",
+                            description: undefined
+                        }
+                    }
+                },
+                {
+                    type: "TextField",
+                    ident: "floor_name",
+                    translations: {
+                        'en': {
+                            name:  "Name",
                             description: undefined
                         }
                     },
-                    value_type: "string"
+                    value_type: "string",
+                    validate: undefined,
+                    value_default: undefined,
+                    value_example: "1st Floor"
+                },
+                {
+                    type: "TextField",
+                    ident: "ident",
+                    translations: {
+                        'en': {
+                            name:  "Unique Identifer",
+                            description: "Keep as stable as possible"
+                        }
+                    },
+                    value_type: "string",
+                    validate: [ /^[a-zA-Z0-9_]{3,30}$/ ],
+                    value_default: undefined,
+                    value_example: "floor_1"
                 }
             ]
         },

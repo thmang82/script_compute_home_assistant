@@ -2,6 +2,11 @@ import { SourceDeviceCovers } from "@script_types/sources/devices/source_device_
 import { ScriptConfig } from '../gen/spec_config'; 
 
 type TypeWindows = ScriptConfig["window_setup"];
+type TypeFloor = {
+    area_ids: string[];
+    ident: string;
+    name: string;
+}
 
 export namespace Setup {
 
@@ -21,4 +26,6 @@ export namespace Setup {
     }[] = [];
 
     export let window_setup: TypeWindows = [];
+
+    export let floor_setup: TypeFloor[] = [];
 }

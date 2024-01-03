@@ -3,6 +3,7 @@ import { SourceDeviceCovers } from '@script_types/sources/devices/source_device_
 import { SourceDeviceLights } from '@script_types/sources/devices/source_device_lights';
 import { SourceDevicesOverview } from '@script_types/sources/devices/source_devices_overview';
 import { sRegistry } from '../registry';
+import { Setup } from '../setup';
 
 function copyDeep<T>(input: T): T {
     return <T> JSON.parse(JSON.stringify(input));
@@ -35,11 +36,28 @@ export class DeviceOverview {
 
 
         const loc_all = sRegistry.getLocationAll();
-        const areas = copyDeep(sRegistry.data_areas_arr).map(e => {
+        const areas: { id: string, name: string, area_ids?: string[] }[] = copyDeep(sRegistry.data_areas_arr).map(e => {
             return { id: e.area_id, name: e.name };
         });
         if (areas.findIndex(e => e.id == loc_all.id) < 0) {
             areas.push(loc_all);
+        }
+        Setup.floor_setup.forEach(f => {
+            areas.push({ id: f.ident, name: f.name, area_ids: f.area_ids });
+        });
+
+        function getAreaOkFn(area_o: { id: string, area_ids?: string[] }) {
+            return (e: SourceDeviceLights.LightStatus | SourceDeviceCovers.Cover): boolean => {
+                if (!area_o.area_ids) {
+                    return e.location_ids.indexOf(area_o.id) >= 0;
+                } else {
+                    let f_num = 0;
+                    for (const id of area_o.area_ids) {
+                        f_num += (e.location_ids.indexOf(id) >= 0 ? 1 : 0);
+                    }
+                    return f_num > 0;
+                }
+            };
         }
 
         const ret:  SourceDevicesOverview.Data = {
@@ -50,20 +68,21 @@ export class DeviceOverview {
                 windows_open: windows
             },
             summaries: areas.map(area_o => {
+                const areaOk = getAreaOkFn(area_o);
                 return {
                     location: area_o,
                     state: {
                         lights: {
-                            on_count: active_lights.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                            on_count: active_lights.filter(areaOk).length
                         },
                         doors: {
-                            open_count: doors.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                            open_count: doors.filter(areaOk).length
                         },
                         shutters: {
-                            open_count: shutters.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                            open_count: shutters.filter(areaOk).length
                         },
                         windows: {
-                            open_count: windows.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                            open_count: windows.filter(areaOk).length
                         }
                     }
                 };

@@ -68,6 +68,14 @@ export class MyScript implements Script.Class<ScriptConfig> {
         if (config.window_setup) {
             Setup.window_setup = config.window_setup;
         }
+        if (config.floors) {
+            Setup.floor_setup = [];
+            config.floors.forEach(e => {
+                if (e.area_ids && e.floor_name && e.ident) {
+                    Setup.floor_setup.push({ name: e.floor_name.value, area_ids: e.area_ids.value, ident: e.ident.value });
+                }
+            })
+        }
         if (config.verbose_log) {
             verbose = config.verbose_log.value;
         }
@@ -135,7 +143,11 @@ export class MyScript implements Script.Class<ScriptConfig> {
                     // This is a request from the "cover widget" selector!
                     return Sources.sCovers.getConfigParameters();
                 } else if (ident == "location") {
-                    return sRegistry.getLocationParameters();
+                    const areas_param = sRegistry.getLocationParameters();
+                    Setup.floor_setup.forEach(e => {
+                        areas_param.dropdown_entries.push({ value: e.ident, name: e.name });
+                    });
+                    return areas_param;
                 } else {
                     console.error("Config Options Req: UnkownID: ", ident);
                     return { no_data: 'UnknownID' };
@@ -173,7 +185,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
                         dropdown_entries: entries
                     }
                 } else if (ident == "area_ids") {
-                    return sRegistry.getAreaParameters()
+                    return sRegistry.getAreaParameters();
                 }
             }
             return {

@@ -1,6 +1,7 @@
 import { verbose } from "../script";
 import { sRegistry } from "../registry";
 import { EntityExtGeneric } from "../types/type_extended";
+import { Setup } from "../setup";
 
  /** 
      * The entity states need to be enriched with location information.
@@ -45,6 +46,15 @@ import { EntityExtGeneric } from "../types/type_extended";
                     location_ids.push(area_dev_id);
                 }
                 found_loc++;
+            }
+            for (const floor of Setup.floor_setup) {
+                let found_num = 0;
+                for (const id of location_ids) {
+                    found_num += floor.area_ids.indexOf(id) >= 0 ? 1 : 0;
+                }
+                if (found_num > 0) {
+                    location_ids.push(floor.ident);
+                }
             }
         }
         cover_o.location_ids = location_ids;
