@@ -7,7 +7,7 @@ export const specification: DataSource.Specification = {
     // ---
     provides: [ "compute", "device_lights", "device_covers", "devices_overview" ],
     // ---
-    version:   "0.2.6",
+    version:   "0.2.7",
     // ---
     author_email: "",
     translations: {
@@ -49,6 +49,18 @@ export const specification: DataSource.Specification = {
             validate: [ /^[a-zA-Z0-9-_]+\.+[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+$/ ],
             value_default: undefined,
             value_type: "string"
+        },
+        {
+            type: "Checkbox",
+            ident: "verbose_log",
+            translations: {
+                'en': {
+                    name: "Verbose logging",
+                    description: undefined
+                }
+            },
+            value_default: false,
+            value_type: 'boolean'
         },
         {
             type: "EntryList",
@@ -112,6 +124,7 @@ export const specification: DataSource.Specification = {
                             description: undefined
                         }
                     },
+                    require_select: true, // A sensor ID must be selected, otherwise makes no sense
                     value_type: "string"
                 },
                 {
@@ -126,21 +139,35 @@ export const specification: DataSource.Specification = {
                             description: undefined
                         }
                     },
+                    require_select: true, // A window type must be selected, otherwise makes no sense
                     value_type: "string"
                 },
                 {
-                    type: "TextField",
-                    ident: "name",
+                    type: "DropDownList",
+                    entries: [
+                        {
+                            value: "ORANGE",
+                        }, 
+                        {
+                            value: "GREEN"
+                        },
+                        {
+                            value: "BLUE",
+                        }, 
+                        { 
+                            value: "PURPLE"
+                        }
+                    ],
+                    req_source: false,
+                    auto_complete: false,
+                    ident: "color_active",
                     translations: {
                         'en': {
-                            name:  "New Name",
+                            name:  "Active Color",
                             description: undefined
                         }
                     },
-                    value_type: "string",
-                    validate: undefined,
-                    value_default: undefined,
-                    value_example: "South Window"
+                    value_type: "string"
                 }
             ]
         },
@@ -164,7 +191,8 @@ export const specification: DataSource.Specification = {
                             name:  "Covered Areas",
                             description: undefined
                         }
-                    }
+                    },
+                    require_select_num: 1 // At least one area is needed, empty makes no sense
                 },
                 {
                     type: "TextField",
@@ -195,18 +223,6 @@ export const specification: DataSource.Specification = {
                     value_example: "floor_1"
                 }
             ]
-        },
-        {
-            type: "Checkbox",
-            ident: "verbose_log",
-            translations: {
-                'en': {
-                    name: "Verbose logging",
-                    description: undefined
-                }
-            },
-            value_default: false,
-            value_type: 'boolean'
         }
     ],
     notifications: [],

@@ -8,6 +8,7 @@ import { Setup } from "../setup";
 import { sRegistry } from "../registry";
 import { getStateExt, recomputeLocations } from "./_locations";
 import { CoverStateExt } from "../types/type_extended";
+import { HomeColor } from "@script_types/script/context_home/home_icon";
 
 const log_pre = "covers";
 
@@ -22,6 +23,16 @@ function getFeatures(bitmask: number): SourceDeviceCovers.CoverFeature[] {
     if (bitmask & 64) masks.push("stop_tilt");
     if (bitmask & 128) masks.push("set_tilt_position");
     return masks;
+}
+
+function getColorActive(color_str: string): HomeColor | undefined {
+    switch (color_str) {
+        case "ORANGE": return "ORANGE";
+        case "GREEN":  return "GREEN";
+        case "BLUE":   return "BLUE";
+        case "PURPLE": return "PURPLE";
+    }
+    return undefined;
 }
 
 export class SourceCovers implements SourceBase<EntityCover.State> {
@@ -107,6 +118,7 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             case "shutter": type = "shutter"; break;
         }
         let window_type: SourceDeviceCovers.WindowType | undefined = undefined;
+        let color_active: HomeColor | undefined;
         if (type == "window") {
             // Todo: Check the source config for the window type that the user specified!
             let s = Setup.window_setup;
@@ -117,9 +129,9 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
                     if (type_update) {
                         window_type = type_update;
                     }
-                    let rename_window = setup.name?.value;
-                    if (rename_window) {
-                        rename = rename_window;
+                    let color_active_ = setup.color_active?.value;
+                    if (color_active_) {
+                        color_active = getColorActive(color_active_);
                     }
                 }
             }
@@ -133,6 +145,7 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             tilt_position: e.attributes.current_tilt_position,
             state: e.state,
             window_type,
+            color_active,
             features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : [],
             location_ids: e.location_ids ? e.location_ids : [ sRegistry.getLocationAll().id ]
         };
