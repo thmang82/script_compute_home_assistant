@@ -2,6 +2,11 @@
 import { SourceDeviceCovers } from '@script_types/sources/devices/source_device_covers';
 import { SourceDeviceLights } from '@script_types/sources/devices/source_device_lights';
 import { SourceDevicesOverview } from '@script_types/sources/devices/source_devices_overview';
+import { sRegistry } from '../registry';
+
+function copyDeep<T>(input: T): T {
+    return <T> JSON.parse(JSON.stringify(input));
+}
 
 export class DeviceOverview {
 
@@ -28,29 +33,41 @@ export class DeviceOverview {
         console.log("DeviceOverview:getDataResponse: => doors: ", doors);
         console.log("DeviceOverview:getDataResponse: => windows: ", windows);
 
+
+        const loc_all = sRegistry.getLocationAll();
+        const areas = copyDeep(sRegistry.data_areas_arr).map(e => {
+            return { id: e.area_id, name: e.name };
+        });
+        if (areas.findIndex(e => e.id == loc_all.id) < 0) {
+            areas.push(loc_all);
+        }
+
         const ret:  SourceDevicesOverview.Data = {
-            summaries: [{
-                state: {
-                    lights: {
-                        on_count: active_lights.length
-                    },
-                    doors: {
-                        open_count: doors.length
-                    },
-                    shutters: {
-                        open_count: shutters.length
-                    },
-                    windows: {
-                        open_count: windows.length
+            active_devices: {
+                lights_on: active_lights,
+                doors_open: doors,
+                shutters_open: shutters,
+                windows_open: windows
+            },
+            summaries: areas.map(area_o => {
+                return {
+                    location: area_o,
+                    state: {
+                        lights: {
+                            on_count: active_lights.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                        },
+                        doors: {
+                            open_count: doors.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                        },
+                        shutters: {
+                            open_count: shutters.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                        },
+                        windows: {
+                            open_count: windows.filter(e => e.location_ids.indexOf(area_o.id) >= 0).length
+                        }
                     }
-                },
-                devices: {
-                    lights_on: active_lights,
-                    doors_open: doors,
-                    shutters_open: shutters,
-                    windows_open: windows
-                }
-            }]
+                };
+            })
         }
         return ret;
     }

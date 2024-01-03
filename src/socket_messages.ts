@@ -45,6 +45,7 @@ export class AssistantMessages {
         // subscribe all state changes:
         this.refs_.sendMessage({ type : "subscribe_events" }); // Subscribe to all events!
         this.refs_.sendMessage({ type : "subscribe_events", "event_type": "device_registry_updated" }); // Subscribe to registry updates
+        this.refs_.sendMessage({ type : "subscribe_events", "event_type": "entity_registry_updated" }); // Subscribe to registry updates
         this.refs_.sendMessage({ type : "subscribe_events", "event_type": "area_registry_updated" }); // Subscribe to registry updates
 
         // gets a dump of all states:
@@ -106,9 +107,11 @@ export class AssistantMessages {
                 }
             }
         } else if (msg.event.event_type == "area_registry_updated") {
-            
+            sRegistry.receivedUpdate("area");
         } else if (msg.event.event_type == "device_registry_updated") {
-
+            sRegistry.receivedUpdate("devices");
+        } else if (msg.event.event_type == "entitiy_registry_updated") {
+            sRegistry.receivedUpdate("entities");
         } else {
             if (verbose) {
                 console.debug(`handleEvent:otherEventType: `, msg.event);

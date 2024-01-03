@@ -7,7 +7,7 @@ export const specification: DataSource.Specification = {
     // ---
     provides: [ "compute", "device_lights", "device_covers", "devices_overview" ],
     // ---
-    version:   "0.2.4",
+    version:   "0.2.5",
     // ---
     author_email: "",
     translations: {
@@ -141,6 +141,32 @@ export const specification: DataSource.Specification = {
                     validate: undefined,
                     value_default: undefined,
                     value_example: "South Window"
+                }
+            ]
+        },
+        {
+            type: "EntryList",
+            ident: "floors",
+            translations: {
+                'en': {
+                    name: "Floors",
+                    description: "HomeAssistant is lacking an 'area containing areas' feature. This allows to create floors and assign areas (rooms) to it. This can be handy for showing the state of a floor"
+                }
+            },
+            parameters: [
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "area_ids",
+                    translations: {
+                        'en': {
+                            name:  "Home Area",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string"
                 }
             ]
         },

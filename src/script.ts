@@ -122,6 +122,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
 
         ctx.ui.subscribeCommands<"device_lights">("device_lights", this.executeCommandLights).then(handleSubscriptionResult);
         ctx.ui.subscribeCommands<"device_covers">("device_covers", this.executeCommandCovers).then(handleSubscriptionResult);
+        ctx.ui.subscribeCommands<"devices_overview">("devices_overview", this.executeCommandOverview).then(handleSubscriptionResult);
 
         ctx.ui.registerConfigOptionsProvider(async (req) => {
             let ident = req.parameter_ident;
@@ -133,6 +134,8 @@ export class MyScript implements Script.Class<ScriptConfig> {
                 } else if (ident == "cover") {
                     // This is a request from the "cover widget" selector!
                     return Sources.sCovers.getConfigParameters();
+                } else if (ident == "location") {
+                    return sRegistry.getLocationParameters();
                 } else {
                     console.error("Config Options Req: UnkownID: ", ident);
                     return { no_data: 'UnknownID' };
@@ -169,6 +172,8 @@ export class MyScript implements Script.Class<ScriptConfig> {
                     return {
                         dropdown_entries: entries
                     }
+                } else if (ident == "area_ids") {
+                    return sRegistry.getAreaParameters()
                 }
             }
             return {
@@ -197,8 +202,12 @@ export class MyScript implements Script.Class<ScriptConfig> {
             console.error("sendMessage: no active socket");
             return undefined;
         }
+        
         this.msg_id ++;
         const id = this.msg_id;
+        if (verbose) {
+            console.debug("sendMessage: ", id, msg);
+        }
         // we need to add an increasing message id - https://developers.home-assistant.io/docs/api/websocket/
         const tx_msg = Object.assign(msg, { id });
         this.ctx?.data.websocket.sendData(this.socket_info.uid, tx_msg);
@@ -255,7 +264,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
 
     public executeCommandLights: ScriptCtxUI.CommandCallback<"device_lights"> = async (cmd, _env) => {
         console.log("executeCommandLights: ", cmd);
-        const ha_msg = await Sources.sLights.handleCommandDisplay(cmd);
+        const ha_msg = await Sources.sLights.handleCommandLight(cmd);
         if (ha_msg) {
             this.sendMessage(ha_msg);
             return { success: true };
@@ -273,6 +282,40 @@ export class MyScript implements Script.Class<ScriptConfig> {
             return { success: true };
         } else {
             console.warn(`executeCommandCovers: No handler found for ${cmd.change.ident}`);
+        }
+        return undefined;
+    }
+
+    public executeCommandOverview: ScriptCtxUI.CommandCallback<"devices_overview"> = async (cmd, _env) => {
+        console.log("executeCommandOverview: ", cmd);
+        
+        const loc_id = cmd.location_id;
+        if (loc_id) {
+            if (cmd.change_light) {
+                const ha_msg = await Sources.sLights.handleCommandLight({ change: cmd.change_light });
+                if (ha_msg) this.sendMessage(ha_msg);
+            }
+            if (cmd.change_cover) {
+                const ha_msg = await Sources.sCovers.handleCommandCover({ change: cmd.change_cover });
+                if (ha_msg) this.sendMessage(ha_msg);
+            }
+            if (cmd.change_lights) {
+                const calls = await Sources.sLights.getChangeAllInLocation(loc_id, cmd.change_lights);
+                calls.forEach(cmd => this.sendMessage(cmd));
+            }
+            if (cmd.change_shutters) {
+                const calls = await Sources.sCovers.getChangeAllInLocation(loc_id, cmd.change_shutters, 'shutters');
+                calls.forEach(cmd => this.sendMessage(cmd));
+            }
+            if (cmd.change_doors) {
+                const calls = await Sources.sCovers.getChangeAllInLocation(loc_id, cmd.change_doors, 'doors');
+                calls.forEach(cmd => this.sendMessage(cmd));
+            }
+            if (cmd.change_windows) {
+                const calls = await Sources.sCovers.getChangeAllInLocation(loc_id, cmd.change_windows, 'windows');
+                calls.forEach(cmd => this.sendMessage(cmd));
+            }
+            return { success: true };
         }
         return undefined;
     }

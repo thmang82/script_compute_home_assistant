@@ -8,9 +8,6 @@ import { HaApi } from "./type_base";
 export namespace EntitySensor {
 
     export type SensorState = "opening" | "closing" | "closed" | "open" | "stopped"; // prefer 'closed'/'open' over 'stopped'!
-    export type CoverType  = "shutter" | "blind" | "curtain" | "shade" | "garage" | "awning" | "damper" | "door" | "gate" | "window";
-    export type CoverFeature = "open" | "close" | "set_position" | "stop" | "open_tilt" | "close_tilt" | "set_tilt_position" | "stop_tilt";
-
 
     export interface State extends HaApi.EntityStateBase {
         /** usually the value, e.g. "77.52" or */

@@ -5,20 +5,31 @@ import { sendToDisplay, verbose } from "../script";
 import { EntityLight } from "../types/type_lights";
 import { HaApi } from "../types/type_base";
 import { Setup } from "../setup";
+import { sRegistry } from "../registry";
+import { LightStateExt } from "../types/type_extended";
+import { getStateExt, recomputeLocations } from "./_locations";
+
+const log_pre = "lights";
 
 export class SourceLights implements SourceBase<EntityLight.State> {
 
     public readonly entity_type = "light";
 
-    public lights: EntityLight.State[] = [];
+    public lights: LightStateExt[] = [];
 
     private change_cb_: CallbackChangeNotify | undefined;
     public setChangeHandler = (cb: CallbackChangeNotify): void => {
         this.change_cb_ = cb;
     }
 
+    /** Called from the registry when it was updated */
     public registryUpdated = () => {
-        // Todo: check that all ligths still exist!
+        let new_arr = recomputeLocations(log_pre, this.lights);
+        if (new_arr) {
+            this.lights = new_arr;
+        }
+        // The locations in the lights might have changed, transmit the change to display ...
+        this.transmitStateToDisplay();
     }
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
@@ -35,15 +46,20 @@ export class SourceLights implements SourceBase<EntityLight.State> {
 
     public setStates = (states: EntityLight.State[]) => {
         console.log("SourceLights: setStates: ", states);
+        const added_arr: EntityLight.State[] = [];
         states.forEach(state => {
             const id = state.entity_id;
             const i = this.lights.findIndex(e => e.entity_id == id);
             if (i >= 0) {
-                this.lights[i] = state;
+                this.lights[i] = getStateExt(state, this.lights[i]); // we need to copy over the location_ids => is done in getStateExt
             } else {
+                added_arr.push(state);
                 this.lights.push(state);
             }
         })
+        if (added_arr.length > 0) {
+            recomputeLocations(log_pre, this.lights, added_arr);
+        }
         this.transmitStateToDisplay();
     }
 
@@ -51,22 +67,25 @@ export class SourceLights implements SourceBase<EntityLight.State> {
         console.log("SourceLights: stateChange: ", change);
         const id = change.data.entity_id;
         const i = this.lights.findIndex(e => e.entity_id == id);
+        const new_state = change.data.new_state;
         if (i >= 0) {
-            this.lights[i] = change.data.new_state;
+            this.lights[i] = getStateExt(new_state, this.lights[i]); // we need to copy over the location_ids => is done in getStateExt
         } else {
-            this.lights.push(change.data.new_state);
+            recomputeLocations(log_pre, this.lights, [ new_state ]);
+            this.lights.push(new_state);
         }
         this.transmitStateToDisplay();
     }
 
-    private convertToLightStatus = (e: EntityLight.State): SourceDeviceLights.LightStatus => {
+    private convertToLightStatus = (e: LightStateExt): SourceDeviceLights.LightStatus => {
         const rename = Setup.renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
         const data: SourceDeviceLights.LightStatus = {
             ident: e.entity_id,
             name: rename ? rename : e.attributes.friendly_name,
             brightness: e.attributes.brightness,
             state: e.state,
-            supported_color_modes: []
+            supported_color_modes: [],
+            location_ids: e.location_ids ? e.location_ids : [ sRegistry.getLocationAll().id ]
         };
         e.attributes.supported_color_modes.forEach(e => {
             if (e != "white" && e !== "unknown") {
@@ -126,7 +145,24 @@ export class SourceLights implements SourceBase<EntityLight.State> {
         }
     }
 
-    public handleCommandDisplay = async (cmd: SourceDeviceLights.Command.Request): Promise<EntityLight.CallService | undefined> => {
+    /** Returns the list of commands to be send to home assistant */
+    public getChangeAllInLocation = (location_id: string, cmd: "off" | "on"): EntityLight.CallService[] => {
+        const calls: EntityLight.CallService[] = [];
+        for (const light of this.lights) {
+            if (light.location_ids && light.location_ids.indexOf(location_id) >= 0) {
+                calls.push({
+                    type: "call_service",
+                    domain: "light",
+                    service: cmd == 'on' ? "turn_on" : "turn_off",
+                    target: { entity_id: light.entity_id },
+                    service_data: {}
+                })
+            }
+        }
+        return calls;
+    }
+
+    public handleCommandLight = async (cmd: SourceDeviceLights.Command.Request): Promise<EntityLight.CallService | undefined> => {
         const change = cmd.change;
         const ident = change.ident;
         let light = this.lights.find(e => e.entity_id == ident);

@@ -7,8 +7,8 @@ export namespace HaApi {
 
     export type EntityType = "light" | "cover" | "binary_sensor" | "sensor";
 
-    export type EventType = "state_changed" | "area_registry_updated" | "device_registry_updated";
-    export type Event = EventStateChange<any> | EventAreaRegistryUpdate | EventDeviceRegistryUpdate;
+    export type EventType = "state_changed" | "area_registry_updated" | "device_registry_updated" | "entity_registry_updated";
+    export type Event = EventStateChange<any> | EventAreaRegistryUpdate | EventDeviceRegistryUpdate | EventEntityRegistryUpdate;
 
     export interface EventStateChange<T extends EntityState> {
         event_type: "state_changed",
@@ -55,6 +55,21 @@ export namespace HaApi {
         time_fired: string;
         context: Context;
     }
+
+    export interface EventEntityRegistryUpdate {
+        event_type: "entitiy_registry_updated",
+        data: {
+            action: string,
+            entity_id: string
+        },
+        /** e.g. LOCAL */
+        origin: string;
+        /** ISO time str, e.g 2023-07-06T19:11:00.309279+00:00*/
+        time_fired: string;
+        context: Context;
+    }
+
+    
 
     export interface Context {
         /** e.g. 01H4P9TSPN1YQTQQVRT86K4BQX */

@@ -5,6 +5,11 @@ import { SourceDeviceCovers } from "@script_types/sources/devices/source_device_
 import { HaApi } from "../types/type_base";
 import { EntityCover } from "../types/type_covers";
 import { Setup } from "../setup";
+import { sRegistry } from "../registry";
+import { getStateExt, recomputeLocations } from "./_locations";
+import { CoverStateExt } from "../types/type_extended";
+
+const log_pre = "covers";
 
 function getFeatures(bitmask: number): SourceDeviceCovers.CoverFeature[] {
     const masks: SourceDeviceCovers.CoverFeature[] = [];
@@ -23,15 +28,21 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
 
     public readonly entity_type = "cover";
 
-    public covers: EntityCover.State[] = [];
+    public covers: CoverStateExt[] = [];
 
     private change_cb_: CallbackChangeNotify | undefined;
     public setChangeHandler = (cb: CallbackChangeNotify): void => {
         this.change_cb_ = cb;
     }
 
+    /** Called from the registry when it was updated */
     public registryUpdated = () => {
-        // Todo: check that all covers still exist!
+        let new_arr = recomputeLocations(log_pre, this.covers);
+        if (new_arr) {
+            this.covers = new_arr;
+        }
+        // The locations in the covers might have changed, transmit the change to display ...
+        this.transmitStateToDisplay();
     }
 
     public getConfigParameters = (): { dropdown_entries: ParameterType.DropdownEntry[] } => {
@@ -48,15 +59,20 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
 
     public setStates = (states: EntityCover.State[]) => {
         console.log("SourceCovers: setStates: ", states);
+        const added_arr: CoverStateExt[] = [];
         states.forEach(state => {
             const id = state.entity_id;
             const i = this.covers.findIndex(e => e.entity_id == id);
             if (i >= 0) {
-                this.covers[i] = state;
+                this.covers[i] = getStateExt(state, this.covers[i]); // we need to copy over the location_ids => is done in getStateExt
             } else {
+                added_arr.push(state);
                 this.covers.push(state);
             }
         })
+        if (added_arr.length > 0) {
+            recomputeLocations(log_pre, this.covers, added_arr);
+        }
         this.transmitStateToDisplay();
     }
 
@@ -64,16 +80,18 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
         console.log("SourceCovers: stateChange: ", change);
         const id = change.data.entity_id;
         const i = this.covers.findIndex(e => e.entity_id == id);
+        const new_state = change.data.new_state;
         if (i >= 0) {
-            this.covers[i] = change.data.new_state;
+            this.covers[i] = getStateExt(new_state, this.covers[i]); // we need to copy over the location_ids => is done in getStateExt
         } else {
+            recomputeLocations(log_pre, this.covers, [ new_state ]);
             this.covers.push(change.data.new_state);
         }
         this.transmitStateToDisplay();
         
     }
 
-    private convertToCover = (e: EntityCover.State): SourceDeviceCovers.Cover => {
+    private convertToCover = (e: CoverStateExt): SourceDeviceCovers.Cover => {
         let rename = Setup.renamings.find(r => e.entity_id == r.device_id?.value)?.name?.value;
 
         const device_class = e.attributes.device_class;
@@ -115,7 +133,8 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
             tilt_position: e.attributes.current_tilt_position,
             state: e.state,
             window_type,
-            features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : []
+            features: e.attributes.supported_features ? getFeatures(e.attributes.supported_features) : [],
+            location_ids: e.location_ids ? e.location_ids : [ sRegistry.getLocationAll().id ]
         };
         return cover;
     }
@@ -136,6 +155,62 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
         if (this.change_cb_) {
             this.change_cb_();
         }
+    }
+
+
+    /** Returns the list of commands to be send to home assistant */
+    public getChangeAllInLocation = (location_id: string, cmd: "open" | "close", target: 'shutters' | 'doors' | 'windows'): EntityCover.CallService[] => {
+        const calls: EntityCover.CallService[] = [];
+        for (const cover of this.covers) {
+
+            const features = getFeatures(cover.attributes.supported_features);
+            const can_open_close = features.indexOf('open') >= 0 || features.indexOf('close') >= 0;
+            const can_tilt_open_close = features.indexOf('open_tilt') >= 0 || features.indexOf('close_tilt') >= 0;
+
+            if (can_open_close || can_tilt_open_close) {
+                const cover_type = cover.attributes.device_class;
+                let is_door = cover_type == "door" || cover_type == "gate" || cover_type == "garage";
+                const is_shutter = cover_type == 'awning' || cover_type == 'blind' || cover_type == 'curtain' || cover_type == 'shade' || cover_type == 'shutter';
+                let is_window = cover_type == 'window';
+                if (is_window) {
+                    // Check the window type overrides if there are doors existent!
+                    let s = Setup.window_setup;
+                    if (s) {
+                        const setup = s.find(r => cover.entity_id == r.window_sensor_id?.value);
+                        if (setup) {
+                            let type_update = <SourceDeviceCovers.WindowType | undefined> setup.window_type?.value;
+                            if (type_update && (type_update == "door" || type_update == "sliding_door")) {
+                                is_door   = true;
+                                is_window = false;
+                            }
+                        }
+                    }
+                }
+                // Now sheck if we have the correct type:
+                const is_type_ok = target == 'doors' ? is_door : (target == 'windows' ? is_window : (target == 'shutters' ? is_shutter : false));
+
+                // Check location:
+                if (is_type_ok && cover.location_ids && cover.location_ids.indexOf(location_id) >= 0) {
+                    if (can_open_close) {
+                        calls.push({
+                            type: "call_service",
+                            domain: "cover",
+                            service: cmd == 'open' ? "open_cover" : "close_cover",
+                            target: { entity_id: cover.entity_id }
+                        })
+                    }
+                    if (can_tilt_open_close && cmd == 'close') { // We cannot open and open_tilt at the same time => let's decide only to close tilt
+                        calls.push({
+                            type: "call_service",
+                            domain: "cover",
+                            service: "close_cover_tilt",
+                            target: { entity_id: cover.entity_id }
+                        })
+                    }
+                }
+            }
+        }
+        return calls;
     }
 
     public handleCommandCover = async (cmd: SourceDeviceCovers.Command.Request): Promise<EntityCover.CallService | undefined> => {
@@ -176,7 +251,6 @@ export class SourceCovers implements SourceBase<EntityCover.State> {
     /*
     private turnOn = () => {
         const msg = { type: "turn_on", brightness: 50 };
-
     }
     */
 }
