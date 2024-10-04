@@ -1,9 +1,11 @@
 {
     "compilerOptions": {
         "strict": true, 
+        "strictNullChecks": true,
         "alwaysStrict": true, 
         "noUnusedParameters": true,
         "noUnusedLocals": true,
+        "allowUnusedLabels": false,
         "noImplicitReturns": true,
         "esModuleInterop": true,
         "target": "es2018",

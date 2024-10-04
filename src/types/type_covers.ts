@@ -14,6 +14,8 @@ export namespace EntityCover {
     export interface State extends HaApi.EntityStateBase {
         state: CoverState;
         attributes: {
+            device_class: CoverType;
+            
             friendly_name: string;
             /** The opening state, between 0 and 100 */
             current_position?: number;

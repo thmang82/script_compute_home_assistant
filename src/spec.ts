@@ -5,9 +5,9 @@ export const specification: DataSource.Specification = {
     id_ident:  "home_assistant",
     id_author: "thmang82",
     // ---
-    provides: [ "compute", "device_lights", "device_covers" ],
+    provides: [ "compute", "device_lights", "device_covers", "devices_overview" ],
     // ---
-    version:   "0.2.3",
+    version:   "0.2.7",
     // ---
     author_email: "",
     translations: {
@@ -51,6 +51,18 @@ export const specification: DataSource.Specification = {
             value_type: "string"
         },
         {
+            type: "Checkbox",
+            ident: "verbose_log",
+            translations: {
+                'en': {
+                    name: "Verbose logging",
+                    description: undefined
+                }
+            },
+            value_default: false,
+            value_type: 'boolean'
+        },
+        {
             type: "EntryList",
             ident: "device_rename",
             translations: {
@@ -91,16 +103,126 @@ export const specification: DataSource.Specification = {
             ]
         },
         {
-            type: "Checkbox",
-            ident: "verbose_log",
+            type: "EntryList",
+            ident: "window_setup",
             translations: {
                 'en': {
-                    name: "Verbose logging",
-                    description: undefined
+                    name: "Window Setup",
+                    description: "Add window sensors to the list for classifing them"
                 }
             },
-            value_default: false,
-            value_type: 'boolean'
+            parameters: [
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "window_sensor_id",
+                    translations: {
+                        'en': {
+                            name:  "Sensor",
+                            description: undefined
+                        }
+                    },
+                    require_select: true, // A sensor ID must be selected, otherwise makes no sense
+                    value_type: "string"
+                },
+                {
+                    type: "DropDownList",
+                    entries: [],
+                    req_source: true,
+                    auto_complete: false,
+                    ident: "window_type",
+                    translations: {
+                        'en': {
+                            name:  "Window Type",
+                            description: undefined
+                        }
+                    },
+                    require_select: true, // A window type must be selected, otherwise makes no sense
+                    value_type: "string"
+                },
+                {
+                    type: "DropDownList",
+                    entries: [
+                        {
+                            value: "ORANGE",
+                        }, 
+                        {
+                            value: "GREEN"
+                        },
+                        {
+                            value: "BLUE",
+                        }, 
+                        { 
+                            value: "PURPLE"
+                        }
+                    ],
+                    req_source: false,
+                    auto_complete: false,
+                    ident: "color_active",
+                    translations: {
+                        'en': {
+                            name:  "Active Color",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string"
+                }
+            ]
+        },
+        {
+            type: "EntryList",
+            ident: "floors",
+            translations: {
+                'en': {
+                    name: "Floors",
+                    description: "HomeAssistant is lacking an 'area containing areas' feature. This allows to create floors and assign areas (rooms) to it. This can be handy for showing the state of a floor"
+                }
+            },
+            parameters: [
+                {
+                    type: "MultiSelect",
+                    entries: [],
+                    req_source: true,
+                    ident: "area_ids",
+                    translations: {
+                        'en': {
+                            name:  "Covered Areas",
+                            description: undefined
+                        }
+                    },
+                    require_select_num: 1 // At least one area is needed, empty makes no sense
+                },
+                {
+                    type: "TextField",
+                    ident: "floor_name",
+                    translations: {
+                        'en': {
+                            name:  "Name",
+                            description: undefined
+                        }
+                    },
+                    value_type: "string",
+                    validate: undefined,
+                    value_default: undefined,
+                    value_example: "1st Floor"
+                },
+                {
+                    type: "TextField",
+                    ident: "ident",
+                    translations: {
+                        'en': {
+                            name:  "Unique Identifer",
+                            description: "Keep as stable as possible"
+                        }
+                    },
+                    value_type: "string",
+                    validate: [ /^[a-zA-Z0-9_]{3,30}$/ ],
+                    value_default: undefined,
+                    value_example: "floor_1"
+                }
+            ]
         }
     ],
     notifications: [],
