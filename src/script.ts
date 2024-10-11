@@ -11,10 +11,11 @@ import { DeviceOverview } from './sources/overview';
 import { Sources } from './sources/_construct';
 import { sRegistry } from './registry';
 import { Setup } from './setup';
+import { sleep } from './helper';
 
-type ProvidedSources = "compute" | "device_lights" | "device_covers";
+type ProvidedSources = "compute" | "device_lights" | "device_covers";
 
-export let sendToDisplay: FnSendToDisplay | undefined;
+export let sendToDisplay: FnSendToDisplay | undefined;
 export type FnSendToDisplay = <T extends ProvidedSources>(ident: T, data: DataSourcesTypes.MapData<T>) => void;
 
 export interface SocketInfo {
@@ -31,9 +32,14 @@ export class MyScript implements Script.Class<ScriptConfig> {
     private msg_handler: AssistantMessages;
     private source_overview: DeviceOverview;
     
-    private config: ScriptConfig | undefined;
+    private config: ScriptConfig | undefined;
     private ctx: Script.Context | undefined;
-    private socket_info: SocketInfo | undefined;
+
+    /** Is set as long as connected, will be undefined during re-connects */
+    private socket_info: SocketInfo | undefined;
+
+    private socket_url: string | undefined;
+    private running = false;
 
     constructor(){
         sendToDisplay = this.sendToDisplay;
@@ -58,6 +64,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
     start = async (ctx: Script.Context, config: ScriptConfig): Promise<void> => {
         this.ctx = ctx;
         this.config = config;
+        this.running = true;
 
         console.info("Ident:" + specification.id_ident);
         console.info("Config:", config);
@@ -92,29 +99,10 @@ export class MyScript implements Script.Class<ScriptConfig> {
                 host = host + ":8123";
             }
             const url = host + "/api/websocket";
-            console.log(`Connect to ${url} ...`);
+            this.socket_url = url;
 
-            const socket_info = {
-                uid: "",
-            }
-            const result = await ctx.data.websocket.connect(url, (data) => this.msg_handler.onDataReceived(data, socket_info), {
-                auto_reconnect: true,
-                state_handler: (state) => {
-                    console.log(`Socket '${state.uid}' state: ${state.connected ? 'connected' : 'disconnected'}`);
-                    if (!state.connected) {
-                        this.socket_info = undefined;
-                    } else {
-                        this.socket_info = {
-                            uid: state.uid
-                        }
-                    }
-                }
-            });
-            console.debug(`Connect result: `, result);
-            if (result.uid) {
-                socket_info.uid = result.uid;
-                this.socket_info = socket_info;
-            }
+            this.startWebSocket();
+
         } else {
             if (!host) console.error("Config incomplete: host not given");
             if (!token) console.error("Config incomplete: token not given");
@@ -194,6 +182,54 @@ export class MyScript implements Script.Class<ScriptConfig> {
         });   
     }
 
+    /** Try to connect to websocket. If fails, retry for a while */
+    private startWebSocket = async () => {
+        let connected = false
+        while (!connected && this.running) {
+            connected = await this.connectToWebSocket();
+            if (!connected) {
+                // Note: In case of a connect error, there will be no re-tries by the platform! We have to handle that ourself
+                const sleep_seconds = 10;
+                await sleep(sleep_seconds * 1000);
+            }
+        }
+    }
+
+    private connectToWebSocket = async (): Promise<boolean> => {
+        const url = this.socket_url;
+        console.log(`Connect to ${url} ...`);
+        if (!url) {
+            console.error("No Socket URL!");
+            return false;
+        }
+        this.socket_info = undefined; // make sure it is not set
+        const socket_info = {
+            uid: "",
+        }
+        const result = await this.ctx?.data.websocket.connect(url, (data) => this.msg_handler.onDataReceived(data, socket_info), {
+            auto_reconnect: true, // if true, and connected once, the platform will try to reconnect if connection break
+            state_handler: (state) => {
+                console.log(`Socket '${state.uid}' state: ${state.connected ? 'connected' : 'disconnected'}`);
+                if (!state.connected) {
+                    this.socket_info = undefined;
+                } else {
+                    this.socket_info = {
+                        uid: state.uid
+                    }
+                }
+            }
+        });
+        console.debug(`Connect result: `, result);
+        if (result?.uid) {
+            socket_info.uid = result.uid;
+            this.socket_info = socket_info;
+            return true;
+        } else if (result?.error) {
+            console.debug(`Error connecting to websocket: `, result?.error);
+        }
+        return false;
+    }
+
     public sendToDisplay = <T extends ProvidedSources>(ident: T, data: DataSourcesTypes.MapData<T>) => {
         if (this.config?.verbose_log) {
             console.debug(`sendToDisplay: '${ident}': `, data);
@@ -209,7 +245,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
         this.ctx?.data.websocket.sendData(this.socket_info.uid, msg);
     }
 
-    private sendMessage = (msg: object): number | undefined => {
+    private sendMessage = (msg: object): number | undefined => {
         if (!this.socket_info) {
             console.error("sendMessage: no active socket");
             return undefined;
@@ -229,6 +265,7 @@ export class MyScript implements Script.Class<ScriptConfig> {
 
     stop = async (_reason: Script.StopReason): Promise<void> => {
         console.info("Stopping all my stuff ...");
+        this.running = false;
         if (this.socket_info) {
             const res = await this.ctx?.data.websocket.disconnect(this.socket_info.uid);
             console.debug(`Disconnect from '${this.config?.host?.value}' result: `, res);
